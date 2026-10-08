@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "coniglio.ping",
+  "name": "Ping",
+  "version": "1.0.0",
+  "author": "Stefano Coniglio",
+  "description": "The round trip to one host, in an outline on the bar; hover for a live ping, click for a terminal on it",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Ping.qml"
+  },
+  "barWidget": {
+    "displayName": "Ping",
+    "description": "Round trip to one host; hover for a live ping, click for a terminal on it",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "host": "www.google.it"
+    },
+    "schema": [
+      {
+        "key": "host",
+        "type": "string",
+        "label": "Host",
+        "description": "The host to ping: a hostname or an address.",
+        "defaultValue": "www.google.it"
+      }
+    ]
+  },
+  "license": "MIT"
+}

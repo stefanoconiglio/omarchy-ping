@@ -1,0 +1,38 @@
+// node Latency.test.js
+const assert = require("assert")
+const L = require("./Latency.js")
+
+assert.strictEqual(L.replyMs("64 bytes from 142.250.129.94: icmp_seq=12 ttl=110 time=73.8 ms"), 73.8)
+assert.strictEqual(L.replyMs("64 bytes from 2a00:1450:4002:411::2003: icmp_seq=1 ttl=117 time=5631 ms"), 5631)
+assert.strictEqual(L.replyMs("64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.045 ms"), 0.045)
+assert.strictEqual(L.replyMs("64 bytes from 10.0.0.1: icmp_seq=4 ttl=64 time<1ms"), 1)
+assert.strictEqual(L.replyMs("no answer yet for icmp_seq=13"), null)
+assert.strictEqual(L.replyMs("PING www.google.it (142.250.129.94) 56(84) bytes of data."), null)
+assert.strictEqual(L.replyMs("From 192.168.1.1 icmp_seq=5 Destination Host Unreachable"), null)
+assert.strictEqual(L.replyMs(""), null)
+
+assert.strictEqual(L.status(0, false, 3000), "waiting")
+assert.strictEqual(L.status(0, false, 10001), "down")
+assert.strictEqual(L.status(23, true, 900), "good")
+assert.strictEqual(L.status(49.9, true, 900), "good")
+assert.strictEqual(L.status(50, true, 900), "slow")
+assert.strictEqual(L.status(100, true, 900), "bad")
+assert.strictEqual(L.status(5631, true, 6000), "bad")
+assert.strictEqual(L.status(23, true, 10001), "down")
+
+assert.strictEqual(L.label("good", 23.3, false), "23 ms")
+assert.strictEqual(L.label("bad", 5631, false), "5.6 s")
+assert.strictEqual(L.label("good", 23.3, true), "23")
+assert.strictEqual(L.label("down", 0, false), "no net")
+assert.strictEqual(L.label("down", 0, true), "×")
+assert.strictEqual(L.label("waiting", 0, false), "…")
+assert.strictEqual(L.label("none", 0, false), "—")
+
+assert(L.validHost("www.google.it"))
+assert(L.validHost("2a00:1450:4002:411::2003"))
+assert(!L.validHost("-c 1"))
+assert(!L.validHost("a b"))
+assert(!L.validHost("x\";rm"))
+assert(!L.validHost(""))
+
+console.log("Latency.js: all assertions pass")
