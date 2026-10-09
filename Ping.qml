@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "Latency.js" as Latency
@@ -11,9 +10,8 @@ import "Latency.js" as Latency
 // The face reads a continuous `ping -n -O -i 1 <host>` of its own. Apart from
 // it, one shell runs `ping <host> -i 1` at the user's prompt all the time, in
 // a tmux session (ping-session.sh). Hovering the face shows that session's
-// screen, live; a click opens a terminal attached to it in the same place, to
-// stop the ping or type another command. The terminal closes when it loses
-// the focus, or on a second click; the session goes on.
+// screen, live. A click pauses both pings, and the next one resumes them; the
+// pause is kept in the widget's shell.json entry.
 BarWidget {
   id: root
 
@@ -22,6 +20,10 @@ BarWidget {
   readonly property string host: {
     var value = String(setting("host", "www.google.it")).trim()
     return Latency.validHost(value) ? value : ""
+  }
+  readonly property bool paused: {
+    var value = setting("paused", false)
+    return value === true || value === "true"
   }
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -35,10 +37,12 @@ BarWidget {
   property bool hasReply: false
   property real lastHeard: Date.now()   // the last reply, or the start before any
   property real now: Date.now()
-  readonly property string reading: host === "" ? "none" : Latency.status(latencyMs, hasReply, now - lastHeard)
+  readonly property string reading: host === "" ? "none"
+    : paused ? "paused"
+    : Latency.status(latencyMs, hasReply, now - lastHeard)
 
   function startPing() {
-    if (host === "" || pinger.running) return
+    if (host === "" || paused || pinger.running) return
     pinger.command = ["ping", "-n", "-O", "-i", "1", "--", host]
     pinger.running = true
   }
@@ -58,7 +62,7 @@ BarWidget {
       }
     }
     // ping runs until stopped; it ends by itself only on an error (no name
-    // resolution, no network at the start), so try again shortly.
+    // resolution, no network at the start), so try again shortly, unless paused.
     onExited: restartPing.restart()
   }
 
@@ -81,12 +85,32 @@ BarWidget {
     lastHeard = Date.now()
     if (pinger.running) pinger.running = false   // exits, and restarts on the new host
     else startPing()
-    ensureSession()
+    syncSession()
+  }
+
+  onPausedChanged: {
+    if (paused) {
+      pinger.running = false
+    } else {
+      hasReply = false
+      lastHeard = Date.now()
+      startPing()
+    }
+    syncSession()
   }
 
   Component.onCompleted: {
     startPing()
-    ensureSession()
+    syncSession()
+  }
+
+  function persist(patch) {
+    settings = Object.assign({}, settings, patch)
+    if (bar && bar.shell) bar.shell.updateEntryInline(moduleName, settings)
+  }
+
+  function togglePaused() {
+    persist({ paused: !paused })
   }
 
   // ---------- the face ----------
@@ -99,7 +123,7 @@ BarWidget {
   function faceColor(reading) {
     if (reading === "bad" || reading === "down") return attention.red
     if (reading === "slow") return attention.orange
-    if (reading === "waiting" || reading === "none") return attention.dim
+    if (reading === "waiting" || reading === "none" || reading === "paused") return attention.dim
     return attention.normal
   }
 
@@ -168,25 +192,21 @@ BarWidget {
       acceptedButtons: Qt.LeftButton
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onEntered: if (root.terminalAddress === "") hoverDelay.restart()
+      onEntered: hoverDelay.restart()
       onExited: {
         hoverDelay.stop()
         root.peeking = false
       }
-      onClicked: {
-        root.peeking = false
-        root.toggleTerminal()
-      }
+      onClicked: root.togglePaused()
     }
   }
 
-  // ---------- the session: hover view and attached terminal ----------
+  // ---------- the session and the hover view ----------
 
   readonly property string script: decodeURIComponent(Qt.resolvedUrl("ping-session.sh").toString().replace(/^file:\/\//, ""))
-  readonly property string terminalClass: "coniglio.ping.terminal"
 
-  // The hover view and the terminal share this rectangle, under the face. The
-  // view's text has the terminal's size (9 pt) and padding.
+  // The hover view, under the face; its text has a terminal's size (9 pt) and
+  // padding.
   readonly property int viewWidth: 720
   readonly property int viewHeight: 300
   readonly property int viewGap: Style.gapsOut
@@ -194,17 +214,30 @@ BarWidget {
   readonly property int viewFontSize: 12
   readonly property int viewLines: Math.max(1, Math.floor(screenText.height / viewMetrics.lineSpacing))
 
-  property bool peeking: false          // the pointer rests on the face
-  property bool attaching: false        // a click is starting the terminal
-  property string terminalAddress: ""   // its window, from Hyprland's events (no 0x)
-  property bool terminalFocused: false
+  property bool peeking: false   // the pointer rests on the face
   property string screenCapture: ""
 
-  // Up while hovered, and while a click starts the terminal that replaces it.
-  readonly property bool viewShown: (peeking || attaching) && terminalAddress === "" && host !== ""
+  readonly property bool viewShown: peeking && host !== ""
 
-  function ensureSession() {
-    if (host !== "") Util.execArgv([script, "session", host])
+  // Brings the session to the widget's state (running or paused), starting it
+  // when missing. One call at a time: a click during a call is applied after
+  // it, so quick clicks can never leave the session out of step.
+  property bool syncPending: false
+
+  function syncSession() {
+    if (host === "") return
+    if (session.running) { syncPending = true; return }
+    // A login shell, for the session the same environment as a terminal's.
+    session.command = ["bash", "-lc", 'exec "$@"', "bash", script, host, paused ? "paused" : "running"]
+    session.running = true
+  }
+
+  Process {
+    id: session
+    onExited: if (root.syncPending) {
+      root.syncPending = false
+      root.syncSession()
+    }
   }
 
   function showScreen(raw) {
@@ -212,9 +245,8 @@ BarWidget {
     screenCapture = lines.slice(-viewLines).join("\n")
   }
 
-  // Under the face (over it, on a bottom bar), inside the screen. `windowY` is
-  // in the bar's coordinates, for the popup; `y` in the monitor's, for the
-  // terminal's window rule.
+  // Under the face (over it, on a bottom bar), inside the screen, in the
+  // bar's coordinates.
   function viewPlace() {
     var win = face.QsWindow.window
     if (!win) return null
@@ -222,31 +254,10 @@ BarWidget {
     var x = Math.round(center.x - viewWidth / 2)
     x = Math.max(viewGap, Math.min(x, win.width - viewWidth - viewGap))
     var bottomBar = bar && bar.position === "bottom"
-    var screenHeight = win.screen ? win.screen.height : 0
-    return {
-      x: x,
-      windowY: bottomBar ? -viewHeight - viewGap : win.height + viewGap,
-      y: bottomBar ? screenHeight - win.height - viewHeight - viewGap : win.height + viewGap
-    }
+    return { x: x, y: bottomBar ? -viewHeight - viewGap : win.height + viewGap }
   }
 
-  function toggleTerminal() {
-    if (terminalAddress !== "") { closeTerminal(); return }
-    if (attaching || host === "") return
-    var place = viewPlace()
-    if (!place) return
-    attaching = true
-    attachTimeout.restart()
-    Util.execArgv([script, "attach", host, String(place.x), String(place.y), String(viewWidth), String(viewHeight)])
-  }
-
-  // Closing the window only detaches it: the session goes on.
-  function closeTerminal() {
-    if (terminalAddress === "") return
-    Quickshell.execDetached(["hyprctl", "dispatch", 'hl.dsp.window.close({ window = "address:0x' + terminalAddress + '" })'])
-  }
-
-  onViewShownChanged: if (viewShown) ensureSession()
+  onViewShownChanged: if (viewShown) syncSession()
 
   Timer {
     id: hoverDelay
@@ -262,52 +273,12 @@ BarWidget {
     onTriggered: if (!capture.running) capture.running = true
   }
 
-  // A click that opened nothing gives the view back to the hover.
-  Timer {
-    id: attachTimeout
-    interval: 4000
-    onTriggered: root.attaching = false
-  }
-
-  // A terminal that never had the focus would never lose it either.
-  Timer {
-    id: focusFallback
-    interval: 2000
-    onTriggered: if (!root.terminalFocused) root.closeTerminal()
-  }
-
   Process {
     id: capture
     command: ["tmux", "-L", "coniglio-ping", "capture-pane", "-p", "-J", "-t", "=ping:"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.showScreen(text)
-    }
-  }
-
-  // The terminal is known from its first appearance (openwindow), focused
-  // when Hyprland says so (activewindowv2), and closed as soon as the focus
-  // goes anywhere else.
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      var data = String(event.data)
-      if (event.name === "openwindow") {
-        var fields = data.split(",")
-        if (fields[2] !== root.terminalClass) return
-        root.terminalAddress = fields[0]
-        root.terminalFocused = false
-        root.attaching = false
-        focusFallback.restart()
-      } else if (event.name === "activewindowv2") {
-        if (root.terminalAddress === "") return
-        if (data === root.terminalAddress) root.terminalFocused = true
-        else if (root.terminalFocused) root.closeTerminal()
-      } else if (event.name === "closewindow") {
-        if (data !== root.terminalAddress) return
-        root.terminalAddress = ""
-        root.terminalFocused = false
-      }
     }
   }
 
@@ -330,7 +301,7 @@ BarWidget {
         var place = root.viewPlace()
         if (!place) return
         viewAnchor.rect.x = place.x
-        viewAnchor.rect.y = place.windowY
+        viewAnchor.rect.y = place.y
       }
     }
 
@@ -366,9 +337,9 @@ BarWidget {
 
   IpcHandler {
     target: "coniglio.ping"
-    function open(): void { if (root.terminalAddress === "") root.toggleTerminal() }
-    function close(): void { root.closeTerminal() }
-    function toggle(): void { root.toggleTerminal() }
+    function toggle(): void { root.togglePaused() }
+    function pause(): void { if (!root.paused) root.togglePaused() }
+    function resume(): void { if (root.paused) root.togglePaused() }
     function status(): string {
       return root.host === "" ? "no valid host" : root.host + " " + Latency.label(root.reading, root.latencyMs, false)
     }

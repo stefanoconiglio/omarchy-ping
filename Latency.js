@@ -34,6 +34,7 @@ function status(ms, hasReply, quietMs) {
 
 function label(state, ms, vertical) {
   if (state === "none") return "—"
+  if (state === "paused") return "off"
   if (state === "down") return vertical ? "×" : "no net"
   if (state === "waiting") return "…"
   if (vertical) return String(Math.round(ms))

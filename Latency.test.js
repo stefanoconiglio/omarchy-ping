@@ -27,6 +27,8 @@ assert.strictEqual(L.label("down", 0, false), "no net")
 assert.strictEqual(L.label("down", 0, true), "×")
 assert.strictEqual(L.label("waiting", 0, false), "…")
 assert.strictEqual(L.label("none", 0, false), "—")
+assert.strictEqual(L.label("paused", 23, false), "off")
+assert.strictEqual(L.label("paused", 23, true), "off")
 
 assert(L.validHost("www.google.it"))
 assert(L.validHost("2a00:1450:4002:411::2003"))

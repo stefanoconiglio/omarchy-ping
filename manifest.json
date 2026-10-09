@@ -4,7 +4,7 @@
   "name": "Ping",
   "version": "1.0.0",
   "author": "Stefano Coniglio",
-  "description": "The round trip to one host, in an outline on the bar; hover for a live ping, click for a terminal on it",
+  "description": "The round trip to one host, in an outline on the bar; hover for a live ping, click to pause or resume it",
   "kinds": [
     "bar-widget"
   ],
@@ -13,12 +13,13 @@
   },
   "barWidget": {
     "displayName": "Ping",
-    "description": "Round trip to one host; hover for a live ping, click for a terminal on it",
+    "description": "Round trip to one host; hover for a live ping, click to pause or resume",
     "category": "Network",
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "host": "www.google.it"
+      "host": "www.google.it",
+      "paused": false
     },
     "schema": [
       {
@@ -27,6 +28,13 @@
         "label": "Host",
         "description": "The host to ping: a hostname or an address.",
         "defaultValue": "www.google.it"
+      },
+      {
+        "key": "paused",
+        "type": "boolean",
+        "label": "Paused",
+        "description": "No ping at all; a click on the widget switches it.",
+        "defaultValue": false
       }
     ]
   },

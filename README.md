@@ -1,8 +1,8 @@
 # Ping
 
 An Omarchy shell widget: the round trip to one host, inside a soft outline on
-the bar. Hover over it to watch a continuous ping; click it to get a terminal
-on that ping, where you can stop it or type another command.
+the bar. Hover over it to watch a continuous ping; click it to pause the ping,
+and again to resume it.
 
 ![The widget on the bar](preview.png)
 
@@ -14,6 +14,7 @@ on that ping, where you can stop it or type another command.
 | `5.6 s`  | a slow reply is shown as it is, in red     |
 | `no net` | no reply for 10 s, in red                  |
 | `…`      | no reply yet                               |
+| `off`    | paused, dimmed                             |
 
 The outline, in the bar's text colour at half strength, marks what belongs to
 the widget; its width never changes, so the widgets next to it never move.
@@ -21,12 +22,12 @@ The colours (`Attention.qml`, `Attention.js`): the theme's own orange when it
 has a real one, a standard orange otherwise, always a standard red, either one
 darkened or lightened just enough to read at 3:1 against the bar.
 
-- **Hover**: a view under the face shows a shell running
-  `ping <host> -i 1`, updated twice a second.
-- **Click**: a terminal opens in the same place, attached to that shell.
-  Ctrl+C stops the ping; Up brings the command back to change it; any other
-  command works too. The terminal closes when it loses the focus, or on a
-  second click, and the shell goes on running.
+- **Hover**: a view under the face shows a shell running `ping <host> -i 1`,
+  updated twice a second.
+- **Click**: pauses both pings (no traffic at all); the face reads `off` and
+  the view shows the stopped ping, with its statistics. Another click types
+  the ping again and restarts the face's. The pause is kept in `shell.json`,
+  so it outlasts a restart of the shell.
 
 ## How it works
 
@@ -44,25 +45,26 @@ Two pings run all the time, one a second each:
   whatever you do there.
 
 The hover view is `tmux capture-pane`, read every 0.5 s while it shows. A
-click opens `tmux attach` in the default terminal (`omarchy-launch-tui`), as a
-floating window placed where the view was. Hyprland's events tell the widget
-when that window opens, gets the focus and loses it; it is closed then, which
-only detaches it. From anywhere: `tmux -L coniglio-ping attach -t ping`.
+pause sends Ctrl+C to the session's ping, a resume types the command again at
+its prompt; one change at a time, each finished before the next, so quick
+clicks never leave the session out of step with the face. To
+type in that shell (stop the ping with Ctrl+C, Up to change the command),
+attach to it from any terminal: `tmux -L coniglio-ping attach -t ping`.
 
 What it costs, measured on Omarchy 4 (Hyprland 0.56, Ghostty): about 6 MB of
 memory for the tmux server, the shell and the two pings together (PSS), and no
-measurable CPU. A click starts a terminal: about 0.5 s of CPU and up to
-130 MB while it is open, all freed when it closes.
+measurable CPU.
 
 ## Settings
 
 The widget's entry in `~/.config/omarchy/shell.json`:
 
 ```json
-{ "id": "coniglio.ping", "host": "www.google.it" }
+{ "id": "coniglio.ping", "host": "www.google.it", "paused": false }
 ```
 
-`host` is a hostname or an address; `www.google.it` when absent. After a
+`host` is a hostname or an address; `www.google.it` when absent. `paused` is
+set by clicks. After a
 change, `tmux -L coniglio-ping kill-server` restarts the session on the new
 host.
 
@@ -81,10 +83,10 @@ Needs `ping` (iputils), `tmux`, and bash as the shell of the session.
 | File               | Purpose                                                       |
 |--------------------|---------------------------------------------------------------|
 | `manifest.json`    | Omarchy plugin manifest for `coniglio.ping`                   |
-| `Ping.qml`         | The face, its ping, the hover view, the attached terminal     |
+| `Ping.qml`         | The face, its ping, the hover view                            |
 | `Latency.js`       | Reply lines, state and label; `node Latency.test.js` tests it |
-| `ping-session.sh`  | Starts the session; opens a terminal attached to it           |
-| `tmux.conf`        | The session's tmux server: no status line, mouse scrolling    |
+| `ping-session.sh`  | Starts the session; pauses and resumes its ping               |
+| `tmux.conf`        | The session's tmux server: no status line                     |
 | `Attention.qml/js` | The face's colours, readable on every theme's bar             |
 
 ## License
