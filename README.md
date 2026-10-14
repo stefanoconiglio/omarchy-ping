@@ -1,5 +1,9 @@
 # Ping
 
+> **Archived on 2026-10-14.** Replaced by
+> [omarchy-network](https://github.com/stefanoconiglio/omarchy-network): Omarchy's
+> network widget with the latency on the bar, from the widget's own ping.
+
 An Omarchy shell widget: the round trip to one host, inside a soft outline on
 the bar. Hover over it to watch a continuous ping; click it to pause the ping,
 and again to resume it.

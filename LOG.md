@@ -80,3 +80,11 @@ Request (user): clicking stops the ping, clicking again resumes it.
   - Not checked: a real mouse click; the pause surviving a shell restart (needs a second restart).
 - Seen on the way: the session's ping, stopped by the first pause after 12 min, had 744 packets
   sent, 19.8% lost, round trips 24 ms to 2.2 s (mean 85 ms).
+
+## 2026-10-14 22:40 CEST — Archived
+
+Decision (user): the ping goes into the network widget, and this repository is archived.
+Replaced by github.com/stefanoconiglio/omarchy-network (`coniglio.network`): the internet
+latency left of the network icon, from that widget's own ping, so no second ping runs.
+`coniglio.ping` is off the bar (entry removed from shell.json); its plugin folder stays.
+README: a note at the top pointing there.
